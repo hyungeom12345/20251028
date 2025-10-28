@@ -2,80 +2,117 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-# 페이지 설정
-st.set_page_config(page_title="MBTI World Trends Explorer", page_icon="🌐", layout="wide")
+# -------------------------------
+# 📂 데이터 로드
+# -------------------------------
+@st.cache_data
+def load_data():
+    df = pd.read_csv("학원교습소정보_2021년01월31일기준.csv", encoding="utf-8")
+    df.columns = df.columns.str.strip()
+    return df
 
-# 제목
-st.markdown("""
-# 🌐 **MBTI World Trends Explorer**
-세계 각국의 MBTI 분포를 탐험해보세요.  
-어떤 나라가 **INTJ**가 가장 많고, 어디는 **ENFP**가 넘치는지 알아볼까요?
-""")
+df = load_data()
 
-# 파일 업로드
-uploaded_file = st.file_uploader("📂 MBTI 데이터 (CSV) 업로드", type=["csv"])
+# -------------------------------
+# 🏷️ 기본 정보
+# -------------------------------
+st.title("📊 지역별 학원 업종 분포 분석 대시보드")
+st.write("2021년 1월 기준 전국 학원교습소 데이터를 활용하여, 지역별·업종별로 학원의 분포를 분석합니다.")
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.success("✅ 데이터 업로드 완료!")
+# -------------------------------
+# ⚙️ 데이터 컬럼 정리
+# -------------------------------
+cols = df.columns.tolist()
+st.sidebar.header("🔍 데이터 선택")
 
-    # 데이터 구조 확인
-    with st.expander("🔍 데이터 미리보기"):
-        st.dataframe(df.head())
+# 지역 관련 컬럼 자동 탐색
+region_cols = [c for c in cols if "시도" in c or "시군구" in c or "주소" in c]
+category_cols = [c for c in cols if "업종" in c or "교습" in c or "분야" in c]
 
-    # MBTI 유형 선택
-    mbti_types = [col for col in df.columns if col.lower() != "country"]
-    selected_type = st.selectbox("🧠 분석할 MBTI 유형을 선택하세요:", mbti_types)
+region_col = st.sidebar.selectbox("📍 지역 컬럼 선택", region_cols)
+category_col = st.sidebar.selectbox("🏫 업종/분류 컬럼 선택", category_cols)
 
-    # TOP 10 국가 선택
-    top10 = df.nlargest(10, selected_type).copy()
-    top10[selected_type] = top10[selected_type].round(2)
+# -------------------------------
+# 📈 지역별 학원 수
+# -------------------------------
+st.subheader("📍 지역별 학원 수 TOP 10")
 
-    st.markdown(f"## 🌏 {selected_type} 유형이 가장 많은 TOP 10 국가")
+region_count = (
+    df[region_col].value_counts()
+    .reset_index()
+    .rename(columns={"index": region_col, region_col: "학원 수"})
+)
 
-    # ✅ Altair 시각화 (색상 스킴 변경: "mint" → "tealblues")
-    chart = (
-        alt.Chart(top10)
-        .mark_bar(cornerRadiusTopLeft=10, cornerRadiusTopRight=10)
-        .encode(
-            x=alt.X(selected_type, title=f"{selected_type} 비율 (%)"),
-            y=alt.Y("Country", sort='-x', title="국가"),
-            color=alt.Color(
-                selected_type,
-                scale=alt.Scale(scheme="tealblues"),  # 안정적 색상 팔레트
-                legend=None
-            ),
-            tooltip=["Country", selected_type]
-        )
-        .properties(height=450)
-        .configure_view(strokeWidth=0)
-        .configure_axis(
-            labelFontSize=12,
-            titleFontSize=14,
-            grid=False
-        )
+top_regions = region_count.head(10)
+
+chart_region = (
+    alt.Chart(top_regions)
+    .mark_bar()
+    .encode(
+        x=alt.X("학원 수:Q", title="학원 수"),
+        y=alt.Y(f"{region_col}:N", sort="-x", title="지역"),
+        color=alt.Color("학원 수:Q", scale=alt.Scale(scheme="blues")),
+        tooltip=[region_col, "학원 수"]
     )
+    .properties(height=400, title="지역별 학원 수 TOP 10")
+)
+st.altair_chart(chart_region, use_container_width=True)
 
-    st.altair_chart(chart, use_container_width=True)
+# -------------------------------
+# 🏫 업종별 학원 수
+# -------------------------------
+st.subheader("🏫 업종별 학원 수 TOP 10")
 
-    # 사이드 카드 형태로 표시
-    st.markdown("### 🏅 국가별 세부 정보")
-    cols = st.columns(5)
-    for i, (country, value) in enumerate(zip(top10["Country"], top10[selected_type])):
-        with cols[i % 5]:
-            st.metric(label=f"🌎 {country}", value=f"{value}%", delta_color="off")
+category_count = (
+    df[category_col].value_counts()
+    .reset_index()
+    .rename(columns={"index": category_col, category_col: "학원 수"})
+)
 
-    # 하단 통계
-    st.markdown("---")
-    st.markdown(f"""
-    ### 📈 {selected_type} 요약 통계
-    - 평균 비율: **{df[selected_type].mean():.2f}%**
-    - 최고 비율: **{df[selected_type].max():.2f}%**
-    - 최저 비율: **{df[selected_type].min():.2f}%**
-    """)
+top_categories = category_count.head(10)
 
-else:
-    st.info("👋 먼저 MBTI CSV 파일을 업로드하세요. 예: `countriesMBTI_16types.csv`")
+chart_category = (
+    alt.Chart(top_categories)
+    .mark_bar()
+    .encode(
+        x=alt.X("학원 수:Q", title="학원 수"),
+        y=alt.Y(f"{category_col}:N", sort="-x", title="업종"),
+        color=alt.Color("학원 수:Q", scale=alt.Scale(scheme="tealblues")),
+        tooltip=[category_col, "학원 수"]
+    )
+    .properties(height=400, title="업종별 학원 수 TOP 10")
+)
+st.altair_chart(chart_category, use_container_width=True)
 
-st.markdown("---")
-st.caption("✨ Created by 현겸 | Streamlit + Altair | 2025")
+# -------------------------------
+# 🎯 특정 업종 선택 시 지역별 분포
+# -------------------------------
+st.subheader("🎯 특정 업종의 지역별 분포")
+
+selected_category = st.selectbox("분포를 보고 싶은 업종을 선택하세요", category_count[category_col].unique())
+
+filtered = df[df[category_col] == selected_category]
+region_dist = (
+    filtered[region_col].value_counts()
+    .reset_index()
+    .rename(columns={"index": region_col, region_col: "학원 수"})
+)
+
+chart_filtered = (
+    alt.Chart(region_dist)
+    .mark_bar()
+    .encode(
+        x=alt.X("학원 수:Q", title="학원 수"),
+        y=alt.Y(f"{region_col}:N", sort="-x"),
+        color=alt.Color("학원 수:Q", scale=alt.Scale(scheme="greens")),
+        tooltip=[region_col, "학원 수"]
+    )
+    .properties(height=400, title=f"'{selected_category}' 업종의 지역별 분포")
+)
+st.altair_chart(chart_filtered, use_container_width=True)
+
+# -------------------------------
+# 📊 데이터 테이블
+# -------------------------------
+with st.expander("📋 원본 데이터 보기"):
+    st.dataframe(df.head(50))
