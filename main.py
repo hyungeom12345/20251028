@@ -33,7 +33,7 @@ if uploaded_file is not None:
 
     st.markdown(f"## 🌏 {selected_type} 유형이 가장 많은 TOP 10 국가")
 
-    # Altair 시각화 (감각적 스타일)
+    # ✅ Altair 시각화 (색상 스킴 변경: "mint" → "tealblues")
     chart = (
         alt.Chart(top10)
         .mark_bar(cornerRadiusTopLeft=10, cornerRadiusTopRight=10)
@@ -42,7 +42,7 @@ if uploaded_file is not None:
             y=alt.Y("Country", sort='-x', title="국가"),
             color=alt.Color(
                 selected_type,
-                scale=alt.Scale(scheme="mint"),
+                scale=alt.Scale(scheme="tealblues"),  # 안정적 색상 팔레트
                 legend=None
             ),
             tooltip=["Country", selected_type]
